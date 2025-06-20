@@ -22,6 +22,7 @@ type ManagerFunc[T any] func(<-chan T);
 const (
 	workerCount   = 8  // adjust based on CPU cores
 	channelBuffer = 16 // buffer size for work queue
+	readWorkersCount = 4 // adjust based on usecase? there are upsides/downsides for higher/lower.
 )
 
 /*
@@ -41,7 +42,6 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 	}()
 
 	var fileWg sync.WaitGroup
-	numWorkers := 2 // Adjust based on CPU cores or IO limits
 
 	// Progress tracking
 	var processed int64
@@ -60,7 +60,7 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 		workChan<-retValue
 	} 
 
-	for i := 0; i < numWorkers; i++ {
+	for i := 0; i < readWorkersCount; i++ {
 		fileWg.Add(1)
 		go func() {
 			defer fileWg.Done()

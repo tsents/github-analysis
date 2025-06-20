@@ -32,6 +32,10 @@ func infer(files []string) {
 	myjson.ParseInParallel(files, myjson.InferFlattenedTypes, myjson.InferManeger)
 }
 
+func collabGraph(files []string) {
+	myjson.ParseInParallel(files, myjson.CollabGraphAction, myjson.CollabGraphManeger)
+}
+
 func main() {
     // Define the action flag (-a or --action)
     action := flag.String("a", "", "action to perform")
@@ -46,7 +50,7 @@ func main() {
 	go func() {
         fmt.Println("pprof listening at http://localhost:6060/debug/pprof/")
         if err := http.ListenAndServe("localhost:6060", nil); err != nil {
-            fmt.Errorf("pprof server error: %v", err)
+            fmt.Fprintf(os.Stderr, "pprof server error: %v", err)
         }
     }()
 	switch *action {
@@ -54,5 +58,7 @@ func main() {
 			infer(files)
 		case "testParse":
 			testParse(files)
+		case "collabGraph":
+			collabGraph(files)
 	}
 }
