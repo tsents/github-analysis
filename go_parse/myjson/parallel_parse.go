@@ -5,10 +5,12 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"sync"
-	"time"
 	"sync/atomic"
+	"time"
+
 	jsoniter "github.com/json-iterator/go"
 )
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -85,7 +87,7 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 					remaining := total - curr
 					rate := float64(curr) / elapsed.Seconds()
 					eta := time.Duration(float64(remaining)/rate) * time.Second
-					fmt.Printf("Progress: %d/%d | ETA: %s\n", curr, total, eta.Truncate(time.Second))
+					log.Printf("Progress: %d/%d | ETA: %s\n", curr, total, eta.Truncate(time.Second))
 				}
 			}
 		}()
