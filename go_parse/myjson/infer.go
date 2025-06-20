@@ -33,23 +33,12 @@ func InferManeger(in <-chan string) {
 	}
 }
 
-func InferFlattenedDecorator(out chan<- string) ActionFunc {
-	wrapper := func(data []byte) {
-		value, err := inferFlattenedTypes(data)
-		if (err != nil) {
-			fmt.Fprintf(os.Stderr, "Error encountered %v\n", err);
-			return;
-		}
-		out <- string(value)
-	}
-	return wrapper;
-}
 
 // InferFlattenedTypes takes JSON data and returns a flattened map of paths to types.
-func inferFlattenedTypes(data []byte) ([]byte, error) {
+func InferFlattenedTypes(data []byte) (string, error) {
     var root any
     if err := json.Unmarshal(data, &root); err != nil {
-        return nil, fmt.Errorf("unmarshal error: %w", err)
+        return "", fmt.Errorf("unmarshal error: %w", err)
     }
 
     flatMap := make(map[string]string)
@@ -76,7 +65,7 @@ func inferFlattenedTypes(data []byte) ([]byte, error) {
     }
     buffer.WriteByte('}')
 
-    return buffer.Bytes(), nil
+    return buffer.String(), nil
 }
 
 
