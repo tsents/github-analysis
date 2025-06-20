@@ -56,7 +56,7 @@ func ProcessNDJSONInParallel(file *os.File, action ActionFunc) error {
 	for {
 		line, err := reader.ReadBytes('\n')
 		if err != nil && err != io.EOF {
-			return fmt.Errorf("read error: %v", err)
+			return fmt.Errorf("read error: %T %v", err, err)
 		}
 		if len(line) > 0 {
 			lines <- line
