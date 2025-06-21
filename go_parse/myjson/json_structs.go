@@ -21,7 +21,7 @@ func UnmarshalPayload(data []byte) (any, error) {
 
 
 type BaseEvent struct {
-    ID        int      `json:"id"`
+    ID        uint32      `json:"id"`
     Type      string   `json:"type"`
     Actor     Actor    `json:"actor"`
     Repo      Repo     `json:"repo"`
@@ -32,7 +32,7 @@ type BaseEvent struct {
 }
 
 type Actor struct {
-    ID           int    `json:"id"`
+    ID           uint32    `json:"id"`
     Login        string `json:"login"`
     DisplayLogin string `json:"display_login"`
     GravatarID   string `json:"gravatar_id"`
@@ -41,13 +41,13 @@ type Actor struct {
 }
 
 type Repo struct {
-    ID   int    `json:"id"`
+    ID   uint32    `json:"id"`
     Name string `json:"name"`
     URL  string `json:"url"`
 }
 
 type Org struct {
-    ID         int    `json:"id"`
+    ID         uint32    `json:"id"`
     Login      string `json:"login"`
     GravatarID string `json:"gravatar_id"`
     URL        string `json:"url"`

@@ -45,7 +45,10 @@ func userGraphFromCollab(file string) {
 
 func repoGraphFromCollab(file string, output string) {
 	repoGraph := data_analysis.ReadCollabToRepoGraph(file)
-	graph.NeighborOutputGraph(output, repoGraph)
+	err := graph.WriteNeighborGraphBinary(output, repoGraph)
+	if (err != nil) {
+		fmt.Fprintf(os.Stderr, "Error encounted in WriteGraphToFile %v\n", err)
+	}
 }
 
 func main() {

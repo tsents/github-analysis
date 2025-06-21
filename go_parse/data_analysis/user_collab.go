@@ -22,19 +22,19 @@ but this is not implemented yet and might not be as usefull (for example, what i
 active repo? will you now after reading all, normalize to the number of interaction?)
 */
 
-type userGraph = graph.Graph[int, struct{}] // a graph of user <-> user
-type collabGraph = graph.Graph[int, struct{}] // a graph of user -> repos
-type repoGraph = graph.Graph[int, struct{}] // A graph of repo -> users
+type userGraph = graph.Graph[uint32, struct{}] // a graph of user <-> user
+type collabGraph = graph.Graph[uint32, struct{}] // a graph of user -> repos
+type repoGraph = graph.Graph[uint32, struct{}] // A graph of repo -> users
 
 
 func ReadCollabGraphToUserGraph(filename string) userGraph {	
-	var collabGraph userGraph = graph.ReadNeighborGraph(filename)
+	var collabGraph userGraph = graph.ReadNeighborGraph[uint32](filename)
 	var repoGraph repoGraph = ConvertCollabToRepoGraph(collabGraph)
 	return ConvertRepoToUserGraph(repoGraph)
 }
 
 func ReadCollabToRepoGraph(filename string) repoGraph {
-	var collabGraph userGraph = graph.ReadNeighborGraph(filename)
+	var collabGraph userGraph = graph.ReadNeighborGraph[uint32](filename)
 	return ConvertCollabToRepoGraph(collabGraph)
 }
 
@@ -48,7 +48,7 @@ func ConvertCollabToRepoGraph(graph collabGraph) repoGraph {
 	for user := range graph {
 		for repo := range graph[user] {
 			if _, ok := repoGraph[repo]; !ok { // if not repo in repoGraph
-				repoGraph[repo] = make(map[int]struct{})
+				repoGraph[repo] = make(map[uint32]struct{})
 			}
 			repoGraph[repo][user] = struct{}{}
 		}
@@ -72,7 +72,7 @@ func ConvertRepoToUserGraph(graph repoGraph) userGraph {
 	for repo := range graph {
 		for user := range graph[repo] {
 			if _, ok := myUserGraph[user]; !ok { // if not repo in repoGraph
-				myUserGraph[user] = make(map[int]struct{})
+				myUserGraph[user] = make(map[uint32]struct{})
 			}
 
 			for otherUser := range graph[repo] {

@@ -18,11 +18,11 @@ type slimEvent struct {
 
 
 type slimActor struct {
-    ID           int    `json:"id"`
+    ID           uint32    `json:"id"`
 }
 
 type slimRepo struct {
-    ID   int    `json:"id"`
+    ID   uint32    `json:"id"`
 }
 
 
@@ -36,10 +36,10 @@ func BoundGraphManager(outputFile string) ManagerFunc[slimEvent] {
 }
 
 func collabGraphManeger(in <-chan slimEvent, outputFile string) {
-	graph := make(map[int]map[int]struct{})
+	graph := make(map[uint32]map[uint32]struct{})
 	for entry := range in {
 		if graph[entry.Actor.ID] == nil {
-			graph[entry.Actor.ID] = make(map[int]struct{})
+			graph[entry.Actor.ID] = make(map[uint32]struct{})
 		}
 		graph[entry.Actor.ID][entry.Repo.ID] = struct{}{}
 	}
