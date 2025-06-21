@@ -107,7 +107,7 @@ func ReadNeighborGraph[T Integer](filename string) Graph[T, struct{}] {
 			remaining := totalCount - processed
 			rate := float64(processed) / elapsed.Seconds()
 			eta := time.Duration(float64(remaining)/rate) * time.Second
-			log.Printf("Read & Prase Progress: %d/%d | ETA: %s\n", processed, totalCount, eta.Truncate(time.Second))
+			log.Printf("ReadNeighborGraph Progress: %d/%d | ETA: %s\n", processed, totalCount, eta.Truncate(time.Second))
 		}	
 	}
     return userProjects
@@ -213,7 +213,7 @@ func WriteNeighborGraphBinary[T Integer](filename string, graph map[T]map[T]stru
 			remaining := totalCount - processed
 			rate := float64(processed) / elapsed.Seconds()
 			eta := time.Duration(float64(remaining)/rate) * time.Second
-			log.Printf("Read & Prase Progress: %d/%d | ETA: %s\n", processed, totalCount, eta.Truncate(time.Second))
+			log.Printf("WriteNeighborGraphBinary Progress: %d/%d | ETA: %s\n", processed, totalCount, eta.Truncate(time.Second))
 		}	
 	}
 
