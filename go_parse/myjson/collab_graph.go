@@ -5,7 +5,6 @@ package myjson
 
 import "fmt"
 
-
 //Simillar to other defined, but slimmed to just id's, and no payloads.
 type slimEvent struct {
     Actor     slimActor    `json:"actor"`
@@ -37,7 +36,7 @@ func CollabGraphManeger(in <-chan slimEvent) {
 func CollabGraphAction(data []byte) (slimEvent, error) {
 	var slimEventCatch slimEvent;
 	if err := json.Unmarshal(data, &slimEventCatch); err != nil {
-		fmt.Errorf("SlimEvent Unmarshal error: %w", err)
+		fmt.Println("SlimEvent Unmarshal error: ", err)
 		return slimEventCatch, err
 	}
 	return slimEventCatch, nil

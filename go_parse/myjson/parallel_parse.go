@@ -131,7 +131,7 @@ func ProcessNDJSONInParallel(file *os.File, action boundedActionFunc) error {
 		go func(workerID int) {
 			defer wg.Done()
 			for line := range lines {
-				processLine(workerID, line, action)
+				action(line)
 			}
 		}(i)
 	}
@@ -152,9 +152,5 @@ func ProcessNDJSONInParallel(file *os.File, action boundedActionFunc) error {
 	close(lines)
 	wg.Wait()
 	return nil
-}
-
-func processLine(workerID int, line []byte, action boundedActionFunc) {
-	action(line)
 }
 
