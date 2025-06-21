@@ -10,10 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	jsoniter "github.com/json-iterator/go"
 )
-var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 
 type AnyJSON map[string]any;
