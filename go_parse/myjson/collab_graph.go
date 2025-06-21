@@ -2,6 +2,7 @@ package myjson
 
 /*
  Implements the collab graph action and maneger.
+ And implement a reader for the collab graph from the outputfile.
 */
 
 import (
@@ -23,6 +24,9 @@ type slimActor struct {
 type slimRepo struct {
     ID   int    `json:"id"`
 }
+
+
+const logEvery = 1000000
 
 
 func BoundGraphManager(outputFile string) ManagerFunc[slimEvent] {
@@ -75,3 +79,4 @@ func CollabGraphAction(data []byte) (slimEvent, error) {
 	}
 	return slimEventCatch, nil
 }
+
