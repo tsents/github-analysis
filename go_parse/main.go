@@ -1,14 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"os"
 	"parser/myjson"
-)
 
-import _ "net/http/pprof"
-import "net/http"
+	"net/http"
+	_ "net/http/pprof"
+)
 
 
 func testParse(files []string) {
@@ -32,10 +32,19 @@ func infer(files []string) {
 	myjson.ParseInParallel(files, myjson.InferFlattenedTypes, myjson.InferManeger)
 }
 
+func collabGraph(files []string, output string) {
+	manager := myjson.BoundGraphManager(output)
+	myjson.ParseInParallel(files, myjson.CollabGraphAction, manager)
+}
+
 func main() {
     // Define the action flag (-a or --action)
     action := flag.String("a", "", "action to perform")
     flag.StringVar(action, "action", "", "action to perform")
+
+
+    output := flag.String("o", "", "action to perform")
+    flag.StringVar(output, "output", "", "action to perform")
 
     // Parse flags
     flag.Parse()
@@ -46,7 +55,7 @@ func main() {
 	go func() {
         fmt.Println("pprof listening at http://localhost:6060/debug/pprof/")
         if err := http.ListenAndServe("localhost:6060", nil); err != nil {
-            fmt.Errorf("pprof server error: %v", err)
+            fmt.Fprintf(os.Stderr, "pprof server error: %v", err)
         }
     }()
 	switch *action {
@@ -54,5 +63,8 @@ func main() {
 			infer(files)
 		case "testParse":
 			testParse(files)
+		case "collabGraph":
+			collabGraph(files, *output)
 	}
 }
+

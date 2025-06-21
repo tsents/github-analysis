@@ -5,10 +5,12 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"sync"
-	"time"
 	"sync/atomic"
+	"time"
+
 	jsoniter "github.com/json-iterator/go"
 )
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -22,6 +24,7 @@ type ManagerFunc[T any] func(<-chan T);
 const (
 	workerCount   = 8  // adjust based on CPU cores
 	channelBuffer = 16 // buffer size for work queue
+	readWorkersCount = 2 // adjust based on usecase? there are upsides/downsides for higher/lower.
 )
 
 /*
@@ -41,7 +44,6 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 	}()
 
 	var fileWg sync.WaitGroup
-	numWorkers := 2 // Adjust based on CPU cores or IO limits
 
 	// Progress tracking
 	var processed int64
@@ -60,7 +62,7 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 		workChan<-retValue
 	} 
 
-	for i := 0; i < numWorkers; i++ {
+	for i := 0; i < readWorkersCount; i++ {
 		fileWg.Add(1)
 		go func() {
 			defer fileWg.Done()
@@ -85,7 +87,7 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 					remaining := total - curr
 					rate := float64(curr) / elapsed.Seconds()
 					eta := time.Duration(float64(remaining)/rate) * time.Second
-					fmt.Printf("Progress: %d/%d | ETA: %s\n", curr, total, eta.Truncate(time.Second))
+					log.Printf("Progress: %d/%d | ETA: %s\n", curr, total, eta.Truncate(time.Second))
 				}
 			}
 		}()
@@ -129,7 +131,7 @@ func ProcessNDJSONInParallel(file *os.File, action boundedActionFunc) error {
 		go func(workerID int) {
 			defer wg.Done()
 			for line := range lines {
-				processLine(workerID, line, action)
+				action(line)
 			}
 		}(i)
 	}
@@ -150,9 +152,5 @@ func ProcessNDJSONInParallel(file *os.File, action boundedActionFunc) error {
 	close(lines)
 	wg.Wait()
 	return nil
-}
-
-func processLine(workerID int, line []byte, action boundedActionFunc) {
-	action(line)
 }
 
