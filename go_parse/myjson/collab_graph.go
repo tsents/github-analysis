@@ -1,9 +1,13 @@
 package myjson
+
 /*
  Implements the collab graph action and maneger.
 */
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 //Simillar to other defined, but slimmed to just id's, and no payloads.
 type slimEvent struct {
@@ -20,7 +24,14 @@ type slimRepo struct {
     ID   int    `json:"id"`
 }
 
-func CollabGraphManeger(in <-chan slimEvent) {
+
+func BoundGraphManager(outputFile string) ManagerFunc[slimEvent] {
+	return func(in <-chan slimEvent) {
+		collabGraphManeger(in, outputFile)
+	}
+}
+
+func collabGraphManeger(in <-chan slimEvent, outputFile string) {
 	graph := make(map[int]map[int]struct{})
 	for entry := range in {
 		if graph[entry.Actor.ID] == nil {
@@ -28,7 +39,30 @@ func CollabGraphManeger(in <-chan slimEvent) {
 		}
 		graph[entry.Actor.ID][entry.Repo.ID] = struct{}{}
 	}
-	fmt.Println(graph)
+
+	file, err := os.OpenFile(outputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error encountered %v\n", err);
+	}
+	defer file.Close()
+
+	for user := range graph {
+		_, err = fmt.Fprintf(file, fmt.Sprintf("%v", user))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error encountered %v\n", err);
+		}	
+		for repo := range graph[user] {
+			// Write string to file
+			_, err = fmt.Fprintf(file, fmt.Sprintf(" %v", repo))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error encountered %v\n", err);
+			}	
+		}
+		_, err = fmt.Fprintln(file, "")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error encountered %v\n", err);
+		}	
+	}
 }
 
 

@@ -1,14 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"os"
 	"parser/myjson"
-)
 
-import _ "net/http/pprof"
-import "net/http"
+	"net/http"
+	_ "net/http/pprof"
+)
 
 
 func testParse(files []string) {
@@ -32,14 +32,19 @@ func infer(files []string) {
 	myjson.ParseInParallel(files, myjson.InferFlattenedTypes, myjson.InferManeger)
 }
 
-func collabGraph(files []string) {
-	myjson.ParseInParallel(files, myjson.CollabGraphAction, myjson.CollabGraphManeger)
+func collabGraph(files []string, output string) {
+	manager := myjson.BoundGraphManager(output)
+	myjson.ParseInParallel(files, myjson.CollabGraphAction, manager)
 }
 
 func main() {
     // Define the action flag (-a or --action)
     action := flag.String("a", "", "action to perform")
     flag.StringVar(action, "action", "", "action to perform")
+
+
+    output := flag.String("o", "", "action to perform")
+    flag.StringVar(output, "output", "", "action to perform")
 
     // Parse flags
     flag.Parse()
@@ -59,7 +64,7 @@ func main() {
 		case "testParse":
 			testParse(files)
 		case "collabGraph":
-			collabGraph(files)
+			collabGraph(files, *output)
 	}
 }
 

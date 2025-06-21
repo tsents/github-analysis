@@ -24,7 +24,7 @@ type ManagerFunc[T any] func(<-chan T);
 const (
 	workerCount   = 8  // adjust based on CPU cores
 	channelBuffer = 16 // buffer size for work queue
-	readWorkersCount = 4 // adjust based on usecase? there are upsides/downsides for higher/lower.
+	readWorkersCount = 2 // adjust based on usecase? there are upsides/downsides for higher/lower.
 )
 
 /*
