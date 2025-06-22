@@ -3,11 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"parser/myjson"
-
 	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"parser/data_analysis"
+	"parser/graph"
+	"parser/myjson"
 )
 
 
@@ -35,6 +36,27 @@ func infer(files []string) {
 func collabGraph(files []string, output string) {
 	manager := myjson.BoundGraphManager(output)
 	myjson.ParseInParallel(files, myjson.CollabGraphAction, manager)
+}
+
+func userGraphFromCollab(file string) {
+	graph := data_analysis.ReadCollabGraphToUserGraph(file)	
+	_ = graph
+}
+
+func repoGraphFromCollab(file string, output string) {
+	repoGraph := data_analysis.ReadCollabToRepoGraph(file)
+	err := graph.WriteNeighborGraphBinary(output, repoGraph)
+	if (err != nil) {
+		fmt.Fprintf(os.Stderr, "Error encounted in WriteGraphToFile %v\n", err)
+	}
+}
+
+func userGraphFromRepo(file string, output string) {
+	graph, err := data_analysis.ConvertRepoFileToUserGraph(file)
+	if (err != nil) {
+		fmt.Fprintf(os.Stderr, "Error encounted in ConvertRepoFileToUserGraph %v\n", err)
+	}
+	_ = graph
 }
 
 func main() {
@@ -65,6 +87,14 @@ func main() {
 			testParse(files)
 		case "collabGraph":
 			collabGraph(files, *output)
+		case "userGraphFromCollab":
+			userGraphFromCollab(files[0])
+		case "repoGraphFromCollab":
+			repoGraphFromCollab(files[0], *output)
+		case "userGraphFromRepo":
+			userGraphFromRepo(files[0], *output)
+		default:
+			fmt.Println("Action not found")
 	}
 }
 
