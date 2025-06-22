@@ -51,6 +51,14 @@ func repoGraphFromCollab(file string, output string) {
 	}
 }
 
+func userGraphFromRepo(file string, output string) {
+	graph, err := data_analysis.ConvertRepoFileToUserGraph(file)
+	if (err != nil) {
+		fmt.Fprintf(os.Stderr, "Error encounted in ConvertRepoFileToUserGraph %v\n", err)
+	}
+	_ = graph
+}
+
 func main() {
     // Define the action flag (-a or --action)
     action := flag.String("a", "", "action to perform")
@@ -81,8 +89,10 @@ func main() {
 			collabGraph(files, *output)
 		case "userGraphFromCollab":
 			userGraphFromCollab(files[0])
-    	case "repoGraphFromCollab":
+		case "repoGraphFromCollab":
 			repoGraphFromCollab(files[0], *output)
+		case "userGraphFromRepo":
+			userGraphFromRepo(files[0], *output)
 		default:
 			fmt.Println("Action not found")
 	}
