@@ -13,7 +13,7 @@ import (
 )
 
 // Used to test empty manager and action
-func testParse(files []string) {
+func testParse(files []string, inputType string) {
 	action := func(data []byte) (any, error) {
 		value, err := myjson.UnmarshalPayload(data)
 		if (err != nil) {
@@ -26,14 +26,14 @@ func testParse(files []string) {
 	emtpyManeger := func(in <-chan any) {
 		for _ = range in {}
 	}
-	myjson.ParseInParallel(files, action, emtpyManeger)
+	myjson.ParseInParallel(files, action, emtpyManeger, inputType)
 }
 
 
 
-func collabGraph(files []string, output string) {
+func collabGraph(files []string, output string, inputType string) {
 	manager := collabgraph.BoundGraphManager(output)
-	myjson.ParseInParallel(files, collabgraph.CollabGraphAction, manager)
+	myjson.ParseInParallel(files, collabgraph.CollabGraphAction, manager, inputType)
 }
 
 //DONT USE THIS
@@ -69,6 +69,10 @@ func main() {
     output := flag.String("o", "", "action to perform")
     flag.StringVar(output, "output", "", "action to perform")
 
+
+    inputType := flag.String("t", "file", "the type of input (http/file)\ndefault is file")
+    flag.StringVar(inputType, "type", "file", "the type of input (http/file)\ndefualt is file")
+
     // Parse flags
     flag.Parse()
 
@@ -81,11 +85,12 @@ func main() {
             fmt.Fprintf(os.Stderr, "pprof server error: %v", err)
         }
     }()
+
 	switch *action {
 		case "testParse":
-			testParse(files)
+			testParse(files, *inputType)
 		case "collabGraph":
-			collabGraph(files, *output)
+			collabGraph(files, *output, *inputType)
 		case "repoGraphFromCollab":
 			repoGraphFromCollab(files[0], *output)
 		default:

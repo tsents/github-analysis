@@ -28,7 +28,7 @@ type ManagerFunc[T any] func(<-chan T);
 const (
 	workerCount   = 8  // adjust based on CPU cores
 	channelBuffer = 16 // buffer size for work queue
-	readWorkersCount = 2 // adjust based on usecase? there are upsides/downsides for higher/lower.
+	readWorkersCount = 4 // adjust based on usecase? there are upsides/downsides for higher/lower.
 	httpTimeout = 180 // seconds
 )
 
@@ -75,20 +75,26 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 		}
 		workChan<-retValue
 	} 
-
 	for i := 0; i < readWorkersCount; i++ {
 		fileWg.Add(1)
 		go func() {
 			defer fileWg.Done()
 			for filename := range fileChan {
-				file, err := os.Open(filename)
+				var reader io.ReadCloser
+				var err error
+				switch sourceType {
+					case "file":
+						reader, err = os.Open(filename)
+					case "http":
+						reader, err = fetchWithTimeout(filename, httpTimeout)
+				}
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to open source: %v\n", err);
 					continue
 				}
+				defer reader.Close()
 
-				err = ProcessNDJSONInParallel(file, boundedAction)
-				file.Close() // close explicitly
+				err = ProcessNDJSONInParallel(reader, boundedAction)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error processing NDJSON: %v\n", err)
 					continue
@@ -127,7 +133,7 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
   The user should make sure that the action function has no race conditions,
   and to capture its output, it should output into a channel within itself.
  */
-func ProcessNDJSONInParallel(originalReader io.Reader, action bindedActionFunc) error {
+func ProcessNDJSONInParallel(originalReader io.ReadCloser, action bindedActionFunc) error {
 	gz, err := gzip.NewReader(originalReader)
 	if err != nil {
 		return fmt.Errorf("gzip reader error: %v", err)
@@ -168,10 +174,9 @@ func ProcessNDJSONInParallel(originalReader io.Reader, action bindedActionFunc) 
 	return nil
 }
 
-func fetchWithTimeout(url string, timeoutSeconds int) (io.Reader, error) {
+func fetchWithTimeout(url string, timeoutSeconds int) (io.ReadCloser, error) {
 	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
-	defer cancel()
+	ctx, _ := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
 
 	// Create HTTP request with the context
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -179,10 +184,21 @@ func fetchWithTimeout(url string, timeoutSeconds int) (io.Reader, error) {
 		return nil, err
 	}
 
+	client := &http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true, // don't auto-decompress .gz
+		},
+	}
 	// Execute the request
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, fmt.Errorf("bad status: %s\nBody:\n%s", resp.Status, string(body)) //Pass error up.
 	}
 
 	// Return the response body as io.Reader
