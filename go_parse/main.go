@@ -9,9 +9,10 @@ import (
 	"parser/data_analysis"
 	"parser/graph"
 	"parser/myjson"
+	collabgraph "parser/myjson/collab_graph"
 )
 
-
+// Used to test empty manager and action
 func testParse(files []string) {
 	action := func(data []byte) (any, error) {
 		value, err := myjson.UnmarshalPayload(data)
@@ -29,20 +30,19 @@ func testParse(files []string) {
 }
 
 
-func infer(files []string) {
-	myjson.ParseInParallel(files, myjson.InferFlattenedTypes, myjson.InferManeger)
-}
 
 func collabGraph(files []string, output string) {
-	manager := myjson.BoundGraphManager(output)
-	myjson.ParseInParallel(files, myjson.CollabGraphAction, manager)
+	manager := collabgraph.BoundGraphManager(output)
+	myjson.ParseInParallel(files, collabgraph.CollabGraphAction, manager)
 }
 
+//DONT USE THIS
 func userGraphFromCollab(file string) {
 	graph := data_analysis.ReadCollabGraphToUserGraph(file)	
 	_ = graph
 }
 
+//Not very usefull, but exsits
 func repoGraphFromCollab(file string, output string) {
 	repoGraph := data_analysis.ReadCollabToRepoGraph(file)
 	err := graph.WriteNeighborGraphBinary(output, repoGraph)
@@ -51,6 +51,7 @@ func repoGraphFromCollab(file string, output string) {
 	}
 }
 
+//DONT USE THIS. user graph is bad
 func userGraphFromRepo(file string, output string) {
 	graph, err := data_analysis.ConvertRepoFileToUserGraph(file)
 	if (err != nil) {
@@ -81,18 +82,12 @@ func main() {
         }
     }()
 	switch *action {
-		case "infer":
-			infer(files)
 		case "testParse":
 			testParse(files)
 		case "collabGraph":
 			collabGraph(files, *output)
-		case "userGraphFromCollab":
-			userGraphFromCollab(files[0])
 		case "repoGraphFromCollab":
 			repoGraphFromCollab(files[0], *output)
-		case "userGraphFromRepo":
-			userGraphFromRepo(files[0], *output)
 		default:
 			fmt.Println("Action not found")
 	}

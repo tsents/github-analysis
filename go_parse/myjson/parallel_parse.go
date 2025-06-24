@@ -10,10 +10,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"net/http"
+	"context"
 
 	jsoniter "github.com/json-iterator/go"
 )
-var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+var Myjson = jsoniter.ConfigCompatibleWithStandardLibrary
 
 
 type AnyJSON map[string]any;
@@ -154,3 +157,24 @@ func ProcessNDJSONInParallel(originalReader io.Reader, action boundedActionFunc)
 	return nil
 }
 
+func fetchWithTimeout(url string, timeoutSeconds int) (io.Reader, error) {
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+
+	// Create HTTP request with the context
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Execute the request
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the response body as io.Reader
+	// The caller is responsible for closing resp.Body
+	return resp.Body, nil
+}
