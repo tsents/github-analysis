@@ -113,8 +113,8 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
   The user should make sure that the action function has no race conditions,
   and to capture its output, it should output into a channel within itself.
  */
-func ProcessNDJSONInParallel(file *os.File, action boundedActionFunc) error {
-	gz, err := gzip.NewReader(file)
+func ProcessNDJSONInParallel(originalReader io.Reader, action boundedActionFunc) error {
+	gz, err := gzip.NewReader(originalReader)
 	if err != nil {
 		return fmt.Errorf("gzip reader error: %v", err)
 	}
