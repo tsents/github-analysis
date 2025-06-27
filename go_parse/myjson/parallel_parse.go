@@ -68,7 +68,7 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 	fileChan := make(chan string)
 
 	// Bound action to the work channel
-	var boundedAction bindedActionFunc = func(line []byte) {
+	var bindedAction bindedActionFunc = func(line []byte) {
 		retValue, err := action(line)
 		if (err != nil) {
 			return // Can add stuff later for error printing.
@@ -80,25 +80,7 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 		go func() {
 			defer fileWg.Done()
 			for filename := range fileChan {
-				var reader io.ReadCloser
-				var err error
-				switch sourceType {
-					case "file":
-						reader, err = os.Open(filename)
-					case "http":
-						reader, err = fetchWithTimeout(filename, httpTimeout)
-				}
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to open source: %v\n", err);
-					continue
-				}
-				defer reader.Close()
-
-				err = ProcessNDJSONInParallel(reader, boundedAction)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error processing NDJSON: %v\n", err)
-					continue
-				}
+				processFile(filename, bindedAction, sourceType)
 
 				// Update progress
 				curr := atomic.AddInt64(&processed, 1)
@@ -123,6 +105,26 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 	fileWg.Wait()
 	close(workChan)
 	wg.Wait()
+}
+
+func processFile(filename string, bindedAction bindedActionFunc, sourceType string) {
+	var reader io.ReadCloser
+	var err error
+	switch sourceType {
+		case "file":
+			reader, err = os.Open(filename)
+		case "http":
+			reader, err = fetchWithTimeout(filename, httpTimeout)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to open source: %v\n", err);
+		return
+	}
+	defer reader.Close()
+	err = ProcessNDJSONInParallel(reader, bindedAction)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error processing NDJSON: %v\n", err)
+	}
 }
 
 /*

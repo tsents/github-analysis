@@ -86,6 +86,10 @@ func main() {
         }
     }()
 
+	if (*output == "") {
+		*output = os.DevNull
+	}
+
 	switch *action {
 		case "testParse":
 			testParse(files, *inputType)
