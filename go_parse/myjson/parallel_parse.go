@@ -18,18 +18,35 @@ import (
 
 //Define the json engine for this package, and all subpackages that will inherit it.
 var Myjson = jsoniter.ConfigCompatibleWithStandardLibrary
+var client = http.DefaultClient
 
 
 type AnyJSON map[string]any;
+
+/*
+A function that is done on each json in the file (parses the bytes[] to json).
+
+This function has generic [T] that indecates its output into a manager function that
+collects outputs of all files and lines into one nice output.
+*/
 type ActionFunc[T any] func([]byte) (T, error);
+
+//An actionFunc that its output is binded into a channel of type T.
 type bindedActionFunc func([]byte);
+
+/*
+A function that collects the processed outputs of the ActionFunc that parses the input.
+
+In the ParseInParallel, this manager is created once, while the actions workers are multiple,
+and each of those is reading multiple lines and feeding the process output into the input channel.
+*/
 type ManagerFunc[T any] func(<-chan T);
 
 const (
-	workerCount   = 8  // adjust based on CPU cores
+	workerCount   = 16  // adjust based on CPU cores
 	channelBuffer = 16 // buffer size for work queue
-	readWorkersCount = 4 // adjust based on usecase? there are upsides/downsides for higher/lower.
-	httpTimeout = 180 // seconds
+	readWorkersCount = 2 // adjust based on usecase? there are upsides/downsides for higher/lower.
+	httpTimeout = 300 // seconds
 )
 
 /*
@@ -186,12 +203,6 @@ func fetchWithTimeout(url string, timeoutSeconds int) (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			DisableCompression: true, // don't auto-decompress .gz
-		},
-	}
-	// Execute the request
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
