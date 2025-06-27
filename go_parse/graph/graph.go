@@ -32,25 +32,25 @@ Outputs a graph in the format of Vertex Neighbor Neighbor... seperated by newlin
 func NeighborOutputGraph[T comparable,U any](outputFile string, graph Graph[T,U]) {
 	file, err := os.OpenFile(outputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error encountered %v\n", err);
+		fmt.Fprintf(os.Stderr, "Error encountered in opening %v: %v\n", outputFile, err);
 	}
 	defer file.Close()
 
 	for user := range graph {
 		_, err = fmt.Fprintf(file, fmt.Sprintf("%v", user))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error encountered %v\n", err);
+			fmt.Fprintf(os.Stderr, "Error encountered Fprintf %v\n", err);
 		}	
 		for repo := range graph[user] {
 			// Write string to file
 			_, err = fmt.Fprintf(file, fmt.Sprintf(" %v", repo))
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error encountered %v\n", err);
+				fmt.Fprintf(os.Stderr, "Error encountered Fprintf %v\n", err);
 			}	
 		}
 		_, err = fmt.Fprintln(file, "")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error encountered %v\n", err);
+			fmt.Fprintf(os.Stderr, "Error encountered Fprintf %v\n", err);
 		}	
 	}
 }

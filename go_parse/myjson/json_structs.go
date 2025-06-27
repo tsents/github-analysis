@@ -12,7 +12,7 @@ type TypeCatcher struct {
 // UnmarshalPayload unmarshals JSON payload into the correct struct based on event type.
 func UnmarshalPayload(data []byte) (any, error) {
 	var eventTypeCatch TypeCatcher;
-	if err := json.Unmarshal(data, &eventTypeCatch); err != nil {
+	if err := Myjson.Unmarshal(data, &eventTypeCatch); err != nil {
 		return nil, fmt.Errorf("CommitCommentEvent: %w", err)
 	}
 	switch eventTypeCatch.EventType {}

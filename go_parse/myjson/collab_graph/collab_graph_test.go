@@ -1,4 +1,4 @@
-package myjson
+package collabgraph
 
 import "testing"
 

@@ -1,4 +1,4 @@
-package myjson
+package infer
 
 import (
 	"sort"
