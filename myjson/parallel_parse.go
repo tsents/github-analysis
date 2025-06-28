@@ -247,23 +247,27 @@ func fetchWithTimeout(url string) (io.ReadCloser, int64, error) {
 	// Create HTTP request with the context
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
+		cancel()
 		return nil, 0, err
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
+		cancel()
 		return nil, 0, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		cancel()
 		return nil, 0, fmt.Errorf("bad status: %s\nBody:\n%s", resp.Status, string(body)) //Pass error up.
 	}
 	
 	lengthStr := resp.Header.Get("Content-Length")
 	length, err := strconv.ParseInt(lengthStr, 10, 64)
 	if err != nil {
+		cancel()
 		return nil, 0, fmt.Errorf("Failed Atoi of length: %v\n", lengthStr) //Pass error up.
 	} 
 
