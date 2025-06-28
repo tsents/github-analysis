@@ -92,17 +92,12 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 		wg.Done()
 	}()
 
-	var fileWg sync.WaitGroup
-
 	// Progress tracking
 	var processed int64
 	start := time.Now()
 	total := int64(len(files))
 
-	// Start worker pool
-	fileChan := make(chan string)
-
-	// Bound action to the work channel
+	// Bind action to the work channel
 	var bindedAction bindedActionFunc = func(line []byte) {
 		retValue, err := action(line)
 		if (err != nil) {
@@ -122,34 +117,20 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 	       return
 	}
 
-	for i := 0; i < readWorkersCount; i++ {
-		fileWg.Add(1)
-		go func() {
-			defer fileWg.Done()
-			for filename := range fileChan {
-				processFile(filename, bindedAction, readingMethod)
+	for i := range files{
+		processFile(files[i], bindedAction, readingMethod)
 
-				// Update progress
-				curr := atomic.AddInt64(&processed, 1)
-				if curr%10 == 0 || curr == total {
-					elapsed := time.Since(start)
-					remaining := total - curr
-					rate := float64(curr) / elapsed.Seconds()
-					eta := time.Duration(float64(remaining)/rate) * time.Second
-					log.Printf("Progress: %d/%d | ETA: %s\n", curr, total, eta.Truncate(time.Second))
-				}
-			}
-		}()
+		// Update progress
+		curr := atomic.AddInt64(&processed, 1)
+		if curr%10 == 0 || curr == total {
+			elapsed := time.Since(start)
+			remaining := total - curr
+			rate := float64(curr) / elapsed.Seconds()
+			eta := time.Duration(float64(remaining)/rate) * time.Second
+			log.Printf("Progress: %d/%d | ETA: %s\n", curr, total, eta.Truncate(time.Second))
+		}
 	}
 
-	// Feed file names to workers
-	for _, f := range files {
-		fileChan <- f
-	}
-	close(fileChan)
-
-	// Wait for file processing and manager
-	fileWg.Wait()
 	close(workChan)
 	wg.Wait()
 }
