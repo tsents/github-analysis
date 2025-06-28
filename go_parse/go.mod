@@ -1,4 +1,4 @@
-module stream-parser
+module local.com/stream-parser
 
 go 1.24.4
 
