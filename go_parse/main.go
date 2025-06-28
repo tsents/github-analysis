@@ -6,10 +6,10 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"parser/data_analysis"
-	"parser/graph"
-	"parser/myjson"
-	collabgraph "parser/myjson/collab_graph"
+	"stream-parser/data_analysis"
+	"stream-parser/graph"
+	"stream-parser/myjson"
+	collabgraph "stream-parser/myjson/collab_graph"
 )
 
 // Used to test empty manager and action
