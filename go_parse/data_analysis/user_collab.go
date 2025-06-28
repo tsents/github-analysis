@@ -3,7 +3,7 @@ package data_analysis
 import (
 	"log"
 	"time"
-	"parser/graph"
+	"stream-parser/graph"
 	"os"
 	"encoding/binary"
 )

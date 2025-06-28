@@ -8,7 +8,7 @@ package collabgraph
 import (
 	"fmt"
 	"os"
-	"parser/myjson"
+	"stream-parser/myjson"
 )
 
 //Simillar to other defined, but slimmed to just id's, and no payloads.
