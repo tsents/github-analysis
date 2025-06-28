@@ -1,3 +1,4 @@
+//Package enabling parsing of .json.gz files in parallel. using local files or fetching from the internet.
 package myjson
 
 import (
@@ -50,12 +51,10 @@ const (
 )
 
 /*
- Parses a list of files in paralle. The action in parsing
- is the action "action", and additionaly a manager goroutine
- is create (once!) with a in channel from the action
- goroutines to allow communication (of type T).
- The file format is expected to be NDJSON (new line delimited json),
- that is compressed using gz. (thus filename.json.jz).
+Takes in multiple files, then for each files reads it, seperating
+by new line. Then for each line it casts action(line), and takes
+it output into a buffered channel for manager, which combines all the output
+from the actions into one output.
 
 Paramaters:
 	- files[]		An array of files, serving as the source. can be real/url.
@@ -65,7 +64,7 @@ Paramaters:
 */
 func ParseInParallel[T any](files []string, action ActionFunc[T], manager ManagerFunc[T], sourceType string) {
 	var wg sync.WaitGroup
-	workChan := make(chan T)
+	workChan := make(chan T, channelBuffer)
 
 	// Start the manager goroutine
 	wg.Add(1)
