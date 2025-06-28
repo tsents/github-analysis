@@ -1,3 +1,4 @@
 data/*
 unused-scripts/*
-go_parse/parser
+stream-parser
+*.txt
