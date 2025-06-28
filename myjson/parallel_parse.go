@@ -1,18 +1,19 @@
-//Package enabling parsing of .json.gz files in parallel. using local files or fetching from the internet.
+// Package enabling parsing of .json.gz files in parallel. using local files or fetching from the internet.
 package myjson
 
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
-	"net/http"
-	"context"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -43,11 +44,29 @@ and each of those is reading multiple lines and feeding the process output into 
 */
 type ManagerFunc[T any] func(<-chan T);
 
+// Return the reader and the length. throwing errors upwards
+type informativeReader func(string) (io.ReadCloser, int64, error)
+
+//A custom wrapper to io.ReadCloser to allow us to define anonymous read and close functions
+type customReadCloser struct {
+	readFunc  func(p []byte) (int, error)
+	closeFunc func() error
+}
+
+func (c *customReadCloser) Read(p []byte) (int, error) {
+	return c.readFunc(p)
+}
+
+func (c *customReadCloser) Close() error {
+	return c.closeFunc()
+}
+
 const (
 	workerCount   = 16  // adjust based on CPU cores
 	channelBuffer = 16 // buffer size for work queue
 	readWorkersCount = 2 // adjust based on usecase? there are upsides/downsides for higher/lower.
 	httpTimeout = 300 // seconds
+	filePrintEvery = 1024 * 1024 * 10// 10MB
 )
 
 /*
@@ -91,12 +110,24 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 		}
 		workChan<-retValue
 	} 
+
+	var readingMethod informativeReader
+	switch sourceType {
+		case "http":
+			readingMethod = fetchWithTimeout 
+	    case "file":
+	        readingMethod = openAndSize
+	    default:
+		fmt.Fprintf(os.Stderr, "Invalid SourceType: %v\n", sourceType)
+	       return
+	}
+
 	for i := 0; i < readWorkersCount; i++ {
 		fileWg.Add(1)
 		go func() {
 			defer fileWg.Done()
 			for filename := range fileChan {
-				processFile(filename, bindedAction, sourceType)
+				processFile(filename, bindedAction, readingMethod)
 
 				// Update progress
 				curr := atomic.AddInt64(&processed, 1)
@@ -123,24 +154,40 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 	wg.Wait()
 }
 
-func processFile(filename string, bindedAction bindedActionFunc, sourceType string) {
-	var reader io.ReadCloser
-	var err error
-	switch sourceType {
-		case "file":
-			reader, err = os.Open(filename)
-		case "http":
-			reader, err = fetchWithTimeout(filename, httpTimeout)
-	}
+func processFile(filename string, bindedAction bindedActionFunc, getReader informativeReader) {
+	reader, length, err := getReader(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open source: %v\n", err);
 		return
 	}
 	defer reader.Close()
-	err = ProcessNDJSONInParallel(reader, bindedAction)
+	err = ProcessNDJSONInParallel(reader, bindedAction, length)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error processing NDJSON: %v\n", err)
 	}
+}
+
+type countingReader struct {
+	r     	io.Reader
+	start 	time.Time
+	curr 	int64
+	length 	int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.curr += int64(n)
+	if n == 0 {
+		return n, err
+	}
+	if c.curr%filePrintEvery == 0 || c.curr == c.length {
+		elapsed := time.Since(c.start)
+		remaining := c.length - c.curr
+		rate := float64(c.curr) / elapsed.Seconds()
+		eta := time.Duration(float64(remaining)/rate) * time.Second
+		log.Printf("Progress in file parsing: %d/%d | ETA: %s\n", c.curr, c.length, eta.Truncate(time.Second))
+	}
+	return n, err
 }
 
 /*
@@ -151,8 +198,9 @@ func processFile(filename string, bindedAction bindedActionFunc, sourceType stri
   The user should make sure that the action function has no race conditions,
   and to capture its output, it should output into a channel within itself.
  */
-func ProcessNDJSONInParallel(originalReader io.ReadCloser, action bindedActionFunc) error {
-	gz, err := gzip.NewReader(originalReader)
+func ProcessNDJSONInParallel(originalReader io.ReadCloser, action bindedActionFunc, length int64) error {
+	cReader := &countingReader{r: originalReader, start: time.Now(), length: length}
+	gz, err := gzip.NewReader(cReader)
 	if err != nil {
 		return fmt.Errorf("gzip reader error: %v", err)
 	}
@@ -174,7 +222,6 @@ func ProcessNDJSONInParallel(originalReader io.ReadCloser, action bindedActionFu
 		}(i)
 	}
 
-	// Read lines from file and feed into channel
 	for {
 		line, err := reader.ReadBytes('\n')
 		if err != nil && err != io.EOF {
@@ -192,29 +239,55 @@ func ProcessNDJSONInParallel(originalReader io.ReadCloser, action bindedActionFu
 	return nil
 }
 
-func fetchWithTimeout(url string, timeoutSeconds int) (io.ReadCloser, error) {
+
+func fetchWithTimeout(url string) (io.ReadCloser, int64, error) {
 	// Create a context with timeout
-	ctx, _ := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(httpTimeout)*time.Second)
 
 	// Create HTTP request with the context
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("bad status: %s\nBody:\n%s", resp.Status, string(body)) //Pass error up.
+		return nil, 0, fmt.Errorf("bad status: %s\nBody:\n%s", resp.Status, string(body)) //Pass error up.
+	}
+	
+	lengthStr := resp.Header.Get("Content-Length")
+	length, err := strconv.ParseInt(lengthStr, 10, 64)
+	if err != nil {
+		return nil, 0, fmt.Errorf("Failed Atoi of length: %v\n", lengthStr) //Pass error up.
+	} 
+
+	var reader io.ReadCloser = &customReadCloser{
+		readFunc: resp.Body.Read,
+		closeFunc: func() error {
+			cancel()
+			return resp.Body.Close()
+		},
 	}
 
-	// Return the response body as io.Reader
 	// The caller is responsible for closing resp.Body
-	return resp.Body, nil
+	return reader, length, nil
 }
 
+//Open a file and get its size. While throwing errors up.
+func openAndSize(filename string) (io.ReadCloser, int64, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, 0, err
+	}
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, 0, err
+	}
+	return file, fileInfo.Size(), err
+} 
