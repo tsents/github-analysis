@@ -7,7 +7,7 @@ package collabgraph
 
 import (
 	"fmt"
-	"os"
+	"stream-parser/graph"
 	"stream-parser/myjson"
 )
 
@@ -30,44 +30,16 @@ type slimRepo struct {
 const logEvery = 1000000
 
 
-func BoundGraphManager(outputFile string) myjson.ManagerFunc[slimEvent] {
-	return func(in <-chan slimEvent) {
-		collabGraphManeger(in, outputFile)
-	}
-}
 
-func collabGraphManeger(in <-chan slimEvent, outputFile string) {
-	graph := make(map[uint32]map[uint32]struct{})
+func CollabGraphManeger(in <-chan slimEvent) graph.Graph[uint32, struct{}] {
+	graph := make(graph.Graph[uint32, struct{}])
 	for entry := range in {
 		if graph[entry.Actor.ID] == nil {
 			graph[entry.Actor.ID] = make(map[uint32]struct{})
 		}
 		graph[entry.Actor.ID][entry.Repo.ID] = struct{}{}
 	}
-
-	file, err := os.OpenFile(outputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error encountered in opening %v: %v\n", outputFile, err);
-	}
-	defer file.Close()
-
-	for user := range graph {
-		_, err = fmt.Fprintf(file, fmt.Sprintf("%v", user))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error encountered in Fprintf, at collabGraphManeger %v\n", err);
-		}	
-		for repo := range graph[user] {
-			// Write string to file
-			_, err = fmt.Fprintf(file, fmt.Sprintf(" %v", repo))
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error encountered in Fprintf, at collabGraphManeger %v\n", err);
-			}	
-		}
-		_, err = fmt.Fprintln(file, "")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error encountered in Fprintf, at collabGraphManeger %v\n", err);
-		}	
-	}
+	return graph
 }
 
 

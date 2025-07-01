@@ -6,59 +6,22 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"stream-parser/data_analysis"
 	"stream-parser/graph"
 	"stream-parser/myjson"
 	collabgraph "stream-parser/myjson/collab_graph"
 )
 
-// Used to test empty manager and action
-func testParse(files []string, inputType string) {
-	action := func(data []byte) (any, error) {
-		value, err := myjson.UnmarshalPayload(data)
-		if (err != nil) {
-			fmt.Fprintf(os.Stderr, "Error encountered %v\n", err);
-			return "", err
-		}
-		return value, nil
-	}
 
-	emtpyManeger := func(in <-chan any) {
-		for _ = range in {}
-	}
-	myjson.ParseInParallel(files, action, emtpyManeger, inputType)
-}
-
-
-
-func collabGraph(files []string, output string, inputType string) {
-	manager := collabgraph.BoundGraphManager(output)
-	myjson.ParseInParallel(files, collabgraph.CollabGraphAction, manager, inputType)
-}
-
-//DONT USE THIS
-func userGraphFromCollab(file string) {
-	graph := data_analysis.ReadCollabGraphToUserGraph(file)	
-	_ = graph
-}
-
-//Not very usefull, but exsits
-func repoGraphFromCollab(file string, output string) {
-	repoGraph := data_analysis.ReadCollabToRepoGraph(file)
-	err := graph.WriteNeighborGraphBinary(output, repoGraph)
+func collabGraph(files []string, inputType string) graph.Graph[uint32, struct{}]{
+	manager := collabgraph.CollabGraphManeger
+	collabGraph, err := myjson.ParseInParallel(files, collabgraph.CollabGraphAction, manager, inputType)
 	if (err != nil) {
-		fmt.Fprintf(os.Stderr, "Error encounted in WriteGraphToFile %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error encounted collabGraph: %s\n", err)
+		return nil
 	}
+	return collabGraph
 }
 
-//DONT USE THIS. user graph is bad
-func userGraphFromRepo(file string, output string) {
-	graph, err := data_analysis.ConvertRepoFileToUserGraph(file)
-	if (err != nil) {
-		fmt.Fprintf(os.Stderr, "Error encounted in ConvertRepoFileToUserGraph %v\n", err)
-	}
-	_ = graph
-}
 
 func main() {
     // Define the action flag (-a or --action)
@@ -91,14 +54,12 @@ func main() {
 	}
 
 	switch *action {
-		case "testParse":
-			testParse(files, *inputType)
 		case "collabGraph":
-			collabGraph(files, *output, *inputType)
-		case "repoGraphFromCollab":
-			repoGraphFromCollab(files[0], *output)
+			outputGraph := collabGraph(files, *inputType)
+			graph.NeighborOutputGraph(*output, outputGraph)
 		default:
 			fmt.Println("Action not found")
+			return
 	}
 }
 
