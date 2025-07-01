@@ -22,6 +22,15 @@ func collabGraph(files []string, inputType string) graph.Graph[uint32, struct{}]
 	return collabGraph
 }
 
+func weightedCollabGraph(files []string, inputType string) graph.Graph[uint32, uint32]{
+	manager := collabgraph.WeightedCollabGraphManeger
+	collabGraph, err := myjson.ParseInParallel(files, collabgraph.CollabGraphAction, manager, inputType)
+	if (err != nil) {
+		fmt.Fprintf(os.Stderr, "Error encounted collabGraph: %s\n", err)
+		return nil
+	}
+	return collabGraph
+}
 
 func main() {
     // Define the action flag (-a or --action)
@@ -57,6 +66,9 @@ func main() {
 		case "collabGraph":
 			outputGraph := collabGraph(files, *inputType)
 			graph.NeighborOutputGraph(*output, outputGraph)
+		case "weightedCollabGraph":
+			outputGraph := weightedCollabGraph(files, *inputType)
+			graph.EdgeListOutputGraph(*output, outputGraph)
 		default:
 			fmt.Println("Action not found")
 			return

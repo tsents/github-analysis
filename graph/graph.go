@@ -26,6 +26,30 @@ type Graph[T comparable,U any] map[T]map[T]U
 
 const logEvery = 100000
 
+
+/*
+Outputs a graph to file in the classic edge-list format. this is the most recommanded method.
+
+Note that for weighted graphs we will have src edge weight. and in nonwieghted will have trailing spaces.
+*/
+func EdgeListOutputGraph[T comparable, U any](outputFile string, graph Graph[T, U]) {
+	file, err := os.OpenFile(outputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening %v: %v\n", outputFile, err)
+		return
+	}
+	defer file.Close()
+
+	for src, neighbors := range graph {
+		for target, weight := range neighbors {
+			_, err := fmt.Fprintf(file, "%v %v %v\n", src, target, weight)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error writing edge: %v\n", err)
+			}
+		}
+	}
+}
+
 /*
 Outputs a graph in the format of Vertex Neighbor Neighbor... seperated by newline.
 */
