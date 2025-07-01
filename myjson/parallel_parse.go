@@ -153,6 +153,7 @@ type countingReader struct {
 	start 	time.Time
 	curr 	int64
 	length 	int64
+	last 	int64
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
@@ -161,7 +162,8 @@ func (c *countingReader) Read(p []byte) (int, error) {
 	if n == 0 {
 		return n, err
 	}
-	if c.curr%filePrintEvery == 0 || c.curr == c.length {
+	if c.curr >= filePrintEvery + c.last || c.curr == c.length {
+		c.last = c.curr
 		elapsed := time.Since(c.start)
 		remaining := c.length - c.curr
 		rate := float64(c.curr) / elapsed.Seconds()
