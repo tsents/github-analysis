@@ -42,7 +42,7 @@ A function that collects the processed outputs of the ActionFunc that parses the
 In the ParseInParallel, this manager is created once, while the actions workers are multiple,
 and each of those is reading multiple lines and feeding the process output into the input channel.
 */
-type ManagerFunc[T any] func(<-chan T);
+type ManagerFunc[T any, R any] func(<-chan T) R;
 
 // Return the reader and the length. throwing errors upwards
 type informativeReader func(string) (io.ReadCloser, int64, error)
@@ -81,14 +81,17 @@ Paramaters:
 	- manager 		The function that collects all the output from the functions, and used to give the final result.
 	- sourceType	The type of the file source. either a route to a real file. or http. (takes "file"/"http") 
 */
-func ParseInParallel[T any](files []string, action ActionFunc[T], manager ManagerFunc[T], sourceType string) {
+func ParseInParallel[T any, R any](files []string, action ActionFunc[T], manager ManagerFunc[T,R], sourceType string) (R, error) {
 	var wg sync.WaitGroup
 	workChan := make(chan T, channelBuffer)
+	
+	resultChan := make(chan R, 1)
 
 	// Start the manager goroutine
 	wg.Add(1)
 	go func() {
-		manager(workChan)
+		result := manager(workChan)
+		resultChan<-result
 		wg.Done()
 	}()
 
@@ -101,7 +104,7 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 	var bindedAction bindedActionFunc = func(line []byte) {
 		retValue, err := action(line)
 		if (err != nil) {
-			return // Can add stuff later for error printing.
+			return// Can add stuff later for error printing.
 		}
 		workChan<-retValue
 	} 
@@ -114,7 +117,9 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 	        readingMethod = openAndSize
 	    default:
 		fmt.Fprintf(os.Stderr, "Invalid SourceType: %v\n", sourceType)
-	       return
+		readingMethod = func(file string) (io.ReadCloser, int64, error) {
+			return nil, 0 , fmt.Errorf("No reader")
+		}
 	}
 
 	for i := range files{
@@ -133,6 +138,7 @@ func ParseInParallel[T any](files []string, action ActionFunc[T], manager Manage
 
 	close(workChan)
 	wg.Wait()
+	return <-resultChan, nil
 }
 
 func processFile(filename string, bindedAction bindedActionFunc, getReader informativeReader) {
