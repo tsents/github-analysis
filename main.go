@@ -60,6 +60,7 @@ func main() {
 
 	if (*output == "") {
 		*output = os.DevNull
+		fmt.Println("WARNING: no output file given, output will be directed to /dev/null")
 	}
 
 	switch *action {

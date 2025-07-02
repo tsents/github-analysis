@@ -64,7 +64,6 @@ func (c *customReadCloser) Close() error {
 const (
 	workerCount   = 16  // adjust based on CPU cores
 	channelBuffer = 16 // buffer size for work queue
-	readWorkersCount = 2 // adjust based on usecase? there are upsides/downsides for higher/lower.
 	httpTimeout = 300 // seconds
 	filePrintEvery = 1024 * 1024 * 10// 10MB
 )
