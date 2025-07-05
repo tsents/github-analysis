@@ -55,6 +55,13 @@ func main() {
 	log.SetOutput(customLogWriter{origWriter: os.Stdout})
 	log.SetFlags(log.LstdFlags) // Optional: include timestamp
 
+	defer func() { //catch or finally
+        if err := recover(); err != nil { //catch
+            fmt.Fprintf(os.Stderr, "Exception: %v\n", err)
+            os.Exit(1)
+        }
+    }()
+
     // Define the action flag (-a or --action)
     action := flag.String("a", "", "action to perform")
     flag.StringVar(action, "action", "", "action to perform")
