@@ -14,27 +14,16 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"bytes"
 
 	jsoniter "github.com/json-iterator/go"
 )
 
-//Define the json engine for this package, and all subpackages that will inherit it.
-var Myjson = jsoniter.ConfigCompatibleWithStandardLibrary
 var client = http.DefaultClient
 
 
 type AnyJSON map[string]any;
 
-/*
-A function that is done on each json in the file (parses the bytes[] to json).
-
-This function has generic [T] that indecates its output into a manager function that
-collects outputs of all files and lines into one nice output.
-*/
-type ActionFunc[T any] func([]byte) (T, error);
-
-//An actionFunc that its output is binded into a channel of type T.
-type bindedActionFunc func([]byte);
 
 /*
 A function that collects the processed outputs of the ActionFunc that parses the input.
@@ -45,28 +34,15 @@ and each of those is reading multiple lines and feeding the process output into 
 type ManagerFunc[T any, R any] func(<-chan T) R;
 
 // Return the reader and the length. throwing errors upwards
-type informativeReader func(string) (io.ReadCloser, int64, error)
-
-//A custom wrapper to io.ReadCloser to allow us to define anonymous read and close functions
-type customReadCloser struct {
-	readFunc  func(p []byte) (int, error)
-	closeFunc func() error
-}
-
-func (c *customReadCloser) Read(p []byte) (int, error) {
-	return c.readFunc(p)
-}
-
-func (c *customReadCloser) Close() error {
-	return c.closeFunc()
-}
+type informativeReader func(string) (io.Reader, int64, error)
 
 const (
-	workerCount   = 16  // adjust based on CPU cores
-	channelBuffer = 16 // buffer size for work queue
-	httpTimeout = 300 // seconds
-	filePrintEvery = 1024 * 1024 * 10// 10MB
+	WORKER_COUNT   = 16  // adjust based on CPU cores
+	CHANNEL_BUFFER = 32 // buffer size for work queue
+	HTTP_TIMEOUT = 300 // seconds
+	BUFFER_SIZE = 1024 * 1024 * 5 //5MB
 )
+
 
 /*
 Takes in multiple files, then for each files reads it, seperating
@@ -76,106 +52,90 @@ from the actions into one output.
 
 Paramaters:
 	- files[]		An array of files, serving as the source. can be real/url.
-	- action		The action to preform on each json entry in the file.
 	- manager 		The function that collects all the output from the functions, and used to give the final result.
 	- sourceType	The type of the file source. either a route to a real file. or http. (takes "file"/"http") 
 */
-func ParseInParallel[T any, R any](files []string, action ActionFunc[T], manager ManagerFunc[T,R], sourceType string) (R, error) {
+func ParseInParallel[T any, R any](files []string, manager ManagerFunc[T,R], sourceType string) (R, error) {
 	var wg sync.WaitGroup
-	workChan := make(chan T, channelBuffer)
-	
-	resultChan := make(chan R, 1)
-
-	// Start the manager goroutine
-	wg.Add(1)
-	go func() {
-		result := manager(workChan)
-		resultChan<-result
-		wg.Done()
-	}()
+	var workerWg sync.WaitGroup  // <--- NEW wait group for workers
+	workChan := make(chan T, CHANNEL_BUFFER)
 
 	// Progress tracking
 	var processed int64
 	start := time.Now()
 	total := int64(len(files))
 
-	// Bind action to the work channel
-	var bindedAction bindedActionFunc = func(line []byte) {
-		retValue, err := action(line)
-		if (err != nil) {
-			return// Can add stuff later for error printing.
-		}
-		workChan<-retValue
-	} 
-
 	var readingMethod informativeReader
 	switch sourceType {
-		case "http":
-			readingMethod = fetchWithTimeout 
-	    case "file":
-	        readingMethod = openAndSize
-	    default:
+	case "http":
+		readingMethod = fetchWithTimeout 
+	case "file":
+		readingMethod = openAndSize
+	default:
 		fmt.Fprintf(os.Stderr, "Invalid SourceType: %v\n", sourceType)
-		readingMethod = func(file string) (io.ReadCloser, int64, error) {
+		readingMethod = func(file string) (io.Reader, int64, error) {
 			return nil, 0 , fmt.Errorf("No reader")
 		}
 	}
 
-	for i := range files{
-		processFile(files[i], bindedAction, readingMethod)
+	jobs := make(chan string, CHANNEL_BUFFER)
 
-		// Update progress
-		curr := atomic.AddInt64(&processed, 1)
-		if curr%10 == 0 || curr == total {
-			elapsed := time.Since(start)
-			remaining := total - curr
-			rate := float64(curr) / elapsed.Seconds()
-			eta := time.Duration(float64(remaining)/rate) * time.Second
-			log.Printf("Progress: %d/%d | ETA: %s\n", curr, total, eta.Truncate(time.Second))
+	// File producer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(jobs)
+		for _, file := range files {
+			jobs <- file
 		}
+		fmt.Println("Done file producer")
+	}()
+
+	// Workers
+	for w := 0; w < WORKER_COUNT; w++ {
+		workerWg.Add(1)
+		go func() {
+			defer workerWg.Done()
+			for file := range jobs {
+				processFile[T](file, readingMethod, workChan)
+
+				curr := atomic.AddInt64(&processed, 1)
+				if curr%10 == 0 || curr == total {
+					elapsed := time.Since(start)
+					remaining := total - curr
+					rate := float64(curr) / elapsed.Seconds()
+					eta := time.Duration(float64(remaining)/rate) * time.Second
+					log.Printf("Progress: %d/%d | ETA: %s\n", curr, total, eta.Truncate(time.Second))
+				}
+			}
+			fmt.Println("Done worker")
+		}()
 	}
 
-	close(workChan)
+	// Close workChan after all workers are done
+	go func() {
+		workerWg.Wait()
+		close(workChan)
+	}()
+
+	// Manager processes results from workChan
+	result := manager(workChan)
+
+	// Wait for file producer (jobs channel closer)
 	wg.Wait()
-	return <-resultChan, nil
+	return result, nil
 }
 
-func processFile(filename string, bindedAction bindedActionFunc, getReader informativeReader) {
-	reader, length, err := getReader(filename)
+func processFile[T any](filename string, getReader informativeReader, out chan<- T) {
+	reader, _, err := getReader(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open source: %v\n", err);
 		return
 	}
-	defer reader.Close()
-	err = ProcessNDJSONInParallel(reader, bindedAction, length)
+	err = ProcessNDJSONInParallel(reader, out)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error processing NDJSON: %v\n", err)
 	}
-}
-
-type countingReader struct {
-	r     	io.Reader
-	start 	time.Time
-	curr 	int64
-	length 	int64
-	last 	int64
-}
-
-func (c *countingReader) Read(p []byte) (int, error) {
-	n, err := c.r.Read(p)
-	c.curr += int64(n)
-	if n == 0 {
-		return n, err
-	}
-	if c.curr >= filePrintEvery + c.last || c.curr == c.length {
-		c.last = c.curr
-		elapsed := time.Since(c.start)
-		remaining := c.length - c.curr
-		rate := float64(c.curr) / elapsed.Seconds()
-		eta := time.Duration(float64(remaining)/rate) * time.Second
-		log.Printf("Progress in file parsing: %d/%d | ETA: %s\n", c.curr, c.length, eta.Truncate(time.Second))
-	}
-	return n, err
 }
 
 /*
@@ -186,51 +146,41 @@ func (c *countingReader) Read(p []byte) (int, error) {
   The user should make sure that the action function has no race conditions,
   and to capture its output, it should output into a channel within itself.
  */
-func ProcessNDJSONInParallel(originalReader io.ReadCloser, action bindedActionFunc, length int64) error {
-	cReader := &countingReader{r: originalReader, start: time.Now(), length: length}
-	gz, err := gzip.NewReader(cReader)
+func ProcessNDJSONInParallel[T any](originalReader io.Reader, out chan<- T) error {
+	gz, err := gzip.NewReader(originalReader)
 	if err != nil {
 		return fmt.Errorf("gzip reader error: %v", err)
 	}
 	defer gz.Close()
 
-	reader := bufio.NewReader(gz)
+	reader := bufio.NewReaderSize(gz, BUFFER_SIZE)
+	var json = jsoniter.ConfigFastest
 
-	lines := make(chan []byte, channelBuffer)
-	var wg sync.WaitGroup
-
-	// Start worker goroutines
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			for line := range lines {
-				action(line)
-			}
-		}(i)
-	}
-
+	var item T;
 	for {
-		line, err := reader.ReadBytes('\n')
+		line, err := reader.ReadSlice('\n')
 		if err != nil && err != io.EOF {
 			return fmt.Errorf("read error: %T %v", err, err)
 		}
 		if len(line) > 0 {
-			lines <- line
+			if err := json.Unmarshal(line, &item); err != nil {
+				fmt.Printf("JSON unmarshal error: %v\n", err)
+				continue
+			}
+			out <- item
 		}
 		if err == io.EOF {
 			break
 		}
 	}
-	close(lines)
-	wg.Wait()
 	return nil
 }
 
 
-func fetchWithTimeout(url string) (io.ReadCloser, int64, error) {
+func fetchWithTimeout(url string) (io.Reader, int64, error) {
 	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(httpTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(HTTP_TIMEOUT)*time.Second)
+	defer cancel()
 
 	// Create HTTP request with the context
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -244,35 +194,29 @@ func fetchWithTimeout(url string) (io.ReadCloser, int64, error) {
 		cancel()
 		return nil, 0, err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		cancel()
 		return nil, 0, fmt.Errorf("bad status: %s\nBody:\n%s", resp.Status, string(body)) //Pass error up.
 	}
 	
 	lengthStr := resp.Header.Get("Content-Length")
 	length, err := strconv.ParseInt(lengthStr, 10, 64)
 	if err != nil {
-		cancel()
 		return nil, 0, fmt.Errorf("Failed Atoi of length: %v\n", lengthStr) //Pass error up.
 	} 
 
-	var reader io.ReadCloser = &customReadCloser{
-		readFunc: resp.Body.Read,
-		closeFunc: func() error {
-			cancel()
-			return resp.Body.Close()
-		},
+	compressedData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, err
 	}
-
-	// The caller is responsible for closing resp.Body
-	return reader, length, nil
+	
+	return bytes.NewReader(compressedData), length, nil
 }
 
 //Open a file and get its size. While throwing errors up.
-func openAndSize(filename string) (io.ReadCloser, int64, error) {
+func openAndSize(filename string) (io.Reader, int64, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, 0, err
