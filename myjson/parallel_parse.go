@@ -29,10 +29,17 @@ A function that collects the processed outputs of the ActionFunc that parses the
 
 In the ParseInParallel, this manager is created once, while the actions workers are multiple,
 and each of those is reading multiple lines and feeding the process output into the input channel.
+
+Make sure that the type T is immutable! this is because the same structure is reused to remove
+memory overhead. a fixed for non-immutable structures will release in feature development
 */
 type ManagerFunc[T any, R any] func(<-chan T) R;
 
-// Return the reader and the length. throwing errors upwards
+/*
+A function that for a given name, returns the corresponding reader and length, throwing errors
+encountered during runtime back to the caller. For example for http request, the name is the requested 
+file and site.
+*/
 type informativeReader func(string) (io.ReadCloser, int64, error)
 
 const (
@@ -44,12 +51,18 @@ const (
 
 
 /*
-Takes in multiple files, then for each files reads it, seperating
-by new line. Then for each line it casts action(line), and takes
-it output into a buffered channel for manager, which combines all the output
-from the actions into one output.
+For a given set of files, and sourceType (http/file) the functions reads the file and
+parsed it as a NDJSON, based on the struct T to unmarshal.
 
-Paramaters:
+
+Then all the structs are collected by a channel into the "manager" function, that is a
+thread that is meant to collect all the structers given into one desired output.
+
+
+NOTE that the struct T is reused by the threads that are outputed, and any use of 
+non immutable structs will lead to race conditions (!). this will be fixed in feature development.
+
+Parameters:
 	- files[]		An array of files, serving as the source. can be real/url.
 	- manager 		The function that collects all the output from the functions, and used to give the final result.
 	- sourceType	The type of the file source. either a route to a real file. or http. (takes "file"/"http") 
@@ -139,12 +152,18 @@ func processFile[T any](filename string, getReader informativeReader, out chan<-
 }
 
 /*
-  Casts the action function on all jsons in the gzip file in paralle.
-  Using multiple workers and streams to parse process the data, and then
-  running the action function itself, all in parallel.
-  
-  The user should make sure that the action function has no race conditions,
-  and to capture its output, it should output into a channel within itself.
+Unmarsjels all jsons read from the reader, assuming format of compressed NDJSON.
+all read structures are then piped into the out channel for the caller to use.
+
+
+NOTE that even if the caller does not intened to use the output, an iteration over the 
+channel is needed to make sure that it is cleaned.
+
+Parameters:
+	- originalReader	The reader that is used to open the gzip. original in the sense that it is
+	later wrapped in a gzip reader to unmarshel it.
+	- out				The channel to push out the unmarshaled objects into, the type of the json struct
+	is inferred based on the type of T.
  */
 func ProcessNDJSONInParallel[T any](originalReader io.Reader, out chan<- T) error {
 	gz, err := gzip.NewReader(originalReader)
@@ -207,12 +226,14 @@ func fetchWithTimeout(url string) (io.ReadCloser, int64, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		cancel()
 		return nil, 0, fmt.Errorf("bad status: %s\nBody:\n%s", resp.Status, string(body)) //Pass error up.
 	}
 	
 	lengthStr := resp.Header.Get("Content-Length")
 	length, err := strconv.ParseInt(lengthStr, 10, 64)
 	if err != nil {
+		cancel()
 		return nil, 0, fmt.Errorf("Failed Atoi of length: %v\n", lengthStr) //Pass error up.
 	} 
 
