@@ -14,7 +14,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"bytes"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -34,7 +33,7 @@ and each of those is reading multiple lines and feeding the process output into 
 type ManagerFunc[T any, R any] func(<-chan T) R;
 
 // Return the reader and the length. throwing errors upwards
-type informativeReader func(string) (io.Reader, int64, error)
+type informativeReader func(string) (io.ReadCloser, int64, error)
 
 const (
 	WORKER_COUNT   = 16  // adjust based on CPU cores
@@ -73,7 +72,7 @@ func ParseInParallel[T any, R any](files []string, manager ManagerFunc[T,R], sou
 		readingMethod = openAndSize
 	default:
 		fmt.Fprintf(os.Stderr, "Invalid SourceType: %v\n", sourceType)
-		readingMethod = func(file string) (io.Reader, int64, error) {
+		readingMethod = func(file string) (io.ReadCloser, int64, error) {
 			return nil, 0 , fmt.Errorf("No reader")
 		}
 	}
@@ -136,6 +135,7 @@ func processFile[T any](filename string, getReader informativeReader, out chan<-
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error processing NDJSON: %v\n", err)
 	}
+	reader.Close()
 }
 
 /*
@@ -176,11 +176,20 @@ func ProcessNDJSONInParallel[T any](originalReader io.Reader, out chan<- T) erro
 	return nil
 }
 
+type cancelReadCloser struct {
+    io.ReadCloser
+    cancelFunc context.CancelFunc
+}
 
-func fetchWithTimeout(url string) (io.Reader, int64, error) {
+func (c cancelReadCloser) Close() error {
+    c.cancelFunc()
+    return c.ReadCloser.Close() 
+}
+
+func fetchWithTimeout(url string) (io.ReadCloser, int64, error) {
 	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(HTTP_TIMEOUT)*time.Second)
-	defer cancel()
+	//defer cancel()
 
 	// Create HTTP request with the context
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -194,7 +203,7 @@ func fetchWithTimeout(url string) (io.Reader, int64, error) {
 		cancel()
 		return nil, 0, err
 	}
-	defer resp.Body.Close()
+	//defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -207,16 +216,15 @@ func fetchWithTimeout(url string) (io.Reader, int64, error) {
 		return nil, 0, fmt.Errorf("Failed Atoi of length: %v\n", lengthStr) //Pass error up.
 	} 
 
-	compressedData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, 0, err
+	resp.Body = cancelReadCloser{
+		ReadCloser: resp.Body,
+		cancelFunc: cancel,
 	}
-	
-	return bytes.NewReader(compressedData), length, nil
+	return resp.Body, length, nil
 }
 
 //Open a file and get its size. While throwing errors up.
-func openAndSize(filename string) (io.Reader, int64, error) {
+func openAndSize(filename string) (io.ReadCloser, int64, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, 0, err
