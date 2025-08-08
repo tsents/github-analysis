@@ -6,9 +6,7 @@ package collabgraph
 */
 
 import (
-	"fmt"
 	"stream-parser/graph"
-	"stream-parser/myjson"
 )
 
 //Simillar to other defined, but slimmed to just id's, and no payloads.
@@ -57,15 +55,5 @@ func WeightedCollabGraphManeger(in <-chan slimEvent) graph.Graph[uint32, uint32]
 		graph[entry.Actor.ID][entry.Repo.ID] += 1
 	}
 	return graph
-}
-
-// InferFlattenedTypes takes JSON data and returns a flattened map of paths to types.
-func CollabGraphAction(data []byte) (slimEvent, error) {
-	var slimEventCatch slimEvent;
-	if err := myjson.Myjson.Unmarshal(data, &slimEventCatch); err != nil {
-		fmt.Println("SlimEvent Unmarshal error: ", err)
-		return slimEventCatch, err
-	}
-	return slimEventCatch, nil
 }
 

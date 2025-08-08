@@ -1,8 +1,9 @@
 package myjson
 
-
 import (
 	"fmt"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 type TypeCatcher struct {
@@ -12,7 +13,7 @@ type TypeCatcher struct {
 // UnmarshalPayload unmarshals JSON payload into the correct struct based on event type.
 func UnmarshalPayload(data []byte) (any, error) {
 	var eventTypeCatch TypeCatcher;
-	if err := Myjson.Unmarshal(data, &eventTypeCatch); err != nil {
+	if err := jsoniter.Unmarshal(data, &eventTypeCatch); err != nil {
 		return nil, fmt.Errorf("CommitCommentEvent: %w", err)
 	}
 	switch eventTypeCatch.EventType {}
