@@ -22,11 +22,11 @@ func UnmarshalPayload(data []byte) (any, error) {
 
 
 type BaseEvent struct {
-    ID        uint32      `json:"id"`
+    ID        string   `json:"id"` // THIS IS BUGGED, because the field is actually uint64 and looks like string.
     Type      string   `json:"type"`
     Actor     Actor    `json:"actor"`
     Repo      Repo     `json:"repo"`
-    Payload   Payload  `json:"payload"` // Payload is generic here, can be customized per event type
+    Payload   *Payload `json:"payload"` // Payload is generic here, can be customized per event type
     Public    bool     `json:"public"`
     CreatedAt string   `json:"created_at"`
     Org       *Org     `json:"org,omitempty"` // Org is optional, so pointer with omitempty

@@ -60,7 +60,8 @@ thread that is meant to collect all the structers given into one desired output.
 
 
 NOTE that the struct T is reused by the threads that are outputed, and any use of 
-non immutable structs will lead to race conditions (!). this will be fixed in feature development.
+non immutable fields (all MAP types for example, strings are ok) will lead to race conditions (!). this will be fixed in feature development.
+To bypass it change filed type T to *T to make the struct store only the pointer, and automaticly allocate new.
 
 Parameters:
 	- files[]		An array of files, serving as the source. can be real/url.

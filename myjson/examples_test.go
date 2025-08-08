@@ -7,8 +7,7 @@ import (
 
 
 func ExampleParseInParallel() {
-
-	var manager ManagerFunc[TypeCatcher, struct{}] = func(in <-chan TypeCatcher) struct{}{
+	var manager ManagerFunc[BaseEvent, struct{}] = func(in <-chan BaseEvent) struct{}{
 		for v := range in {
 			fmt.Println(v)
 		}	
