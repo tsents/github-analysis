@@ -7,9 +7,10 @@ import (
 
 
 func ExampleParseInParallel() {
-	var manager ManagerFunc[BaseEvent, struct{}] = func(in <-chan BaseEvent) struct{}{
+	var manager ManagerFunc[BaseEvent, struct{}] = func(in <-chan ParsedEntry[BaseEvent]) struct{}{
 		for v := range in {
-			fmt.Println(v)
+			//fmt.Println(string(*v.RawEntry))
+			fmt.Println(v.Data)
 		}	
 		return struct{}{}
 	}

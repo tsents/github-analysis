@@ -20,6 +20,10 @@ import (
 
 var client = http.DefaultClient
 
+type ParsedEntry[T any] struct {
+	RawEntry *[]byte
+	Data     T
+}
 
 type AnyJSON map[string]any;
 
@@ -33,7 +37,7 @@ and each of those is reading multiple lines and feeding the process output into 
 Make sure that the type T is immutable! this is because the same structure is reused to remove
 memory overhead. a fixed for non-immutable structures will release in feature development
 */
-type ManagerFunc[T any, R any] func(<-chan T) R;
+type ManagerFunc[T any, R any] func(<-chan ParsedEntry[T]) R;
 
 /*
 A function that for a given name, returns the corresponding reader and length, throwing errors
@@ -71,7 +75,7 @@ Parameters:
 func ParseInParallel[T any, R any](files []string, manager ManagerFunc[T,R], sourceType string) (R, error) {
 	var wg sync.WaitGroup
 	var workerWg sync.WaitGroup  // <--- NEW wait group for workers
-	workChan := make(chan T, CHANNEL_BUFFER)
+	workChan := make(chan ParsedEntry[T], CHANNEL_BUFFER)
 
 	// Progress tracking
 	var processed int64
@@ -139,7 +143,7 @@ func ParseInParallel[T any, R any](files []string, manager ManagerFunc[T,R], sou
 	return result, nil
 }
 
-func processFile[T any](filename string, getReader informativeReader, out chan<- T) {
+func processFile[T any](filename string, getReader informativeReader, out chan<- ParsedEntry[T]) {
 	reader, _, err := getReader(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open source: %v\n", err);
@@ -166,7 +170,7 @@ Parameters:
 	- out				The channel to push out the unmarshaled objects into, the type of the json struct
 	is inferred based on the type of T.
  */
-func ProcessNDJSONInParallel[T any](originalReader io.Reader, out chan<- T) error {
+func ProcessNDJSONInParallel[T any](originalReader io.Reader, out chan<- ParsedEntry[T]) error {
 	gz, err := gzip.NewReader(originalReader)
 	if err != nil {
 		return fmt.Errorf("gzip reader error: %v", err)
@@ -176,14 +180,15 @@ func ProcessNDJSONInParallel[T any](originalReader io.Reader, out chan<- T) erro
 	reader := bufio.NewReaderSize(gz, BUFFER_SIZE)
 	var json = jsoniter.ConfigFastest
 
-	var item T;
+	var item ParsedEntry[T];
 	for {
 		line, err := reader.ReadSlice('\n')
 		if err != nil && err != io.EOF {
 			return fmt.Errorf("read error: %T %v", err, err)
 		}
 		if len(line) > 0 {
-			if err := json.Unmarshal(line, &item); err != nil {
+			item.RawEntry = &line;
+			if err := json.Unmarshal(line, &item.Data); err != nil {
 				fmt.Printf("JSON unmarshal error: %v\n", err)
 				continue
 			}

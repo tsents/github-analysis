@@ -7,6 +7,7 @@ package collabgraph
 
 import (
 	"stream-parser/graph"
+	"stream-parser/myjson"
 )
 
 //Simillar to other defined, but slimmed to just id's, and no payloads.
@@ -33,26 +34,28 @@ Takes in parsed slimEvents, that hold any user <-> repo interaction.
 then generates a 2-partite graph of form graph[user] = repoSet.
 returns the unweighted graph of format Graph[uint32, void]
 */
-func CollabGraphManeger(in <-chan slimEvent) graph.Graph[uint32, struct{}] {
+func CollabGraphManeger(in <-chan myjson.ParsedEntry[slimEvent]) graph.Graph[uint32, struct{}] {
 	graph := make(graph.Graph[uint32, struct{}])
 	for entry := range in {
-		if graph[entry.Actor.ID] == nil {
-			graph[entry.Actor.ID] = make(map[uint32]struct{})
+		entryData := entry.Data
+		if graph[entryData.Actor.ID] == nil {
+			graph[entryData.Actor.ID] = make(map[uint32]struct{})
 		}
-		graph[entry.Actor.ID][entry.Repo.ID] = struct{}{}
+		graph[entryData.Actor.ID][entryData.Repo.ID] = struct{}{}
 	}
 	return graph
 }
 
 // A weighted version of the CollabGraphManeger, counting how many time a
 // user <-> repo interaction was held. for further information refer to CollabGraphManeger.
-func WeightedCollabGraphManeger(in <-chan slimEvent) graph.Graph[uint32, uint32] {
+func WeightedCollabGraphManeger(in <-chan myjson.ParsedEntry[slimEvent]) graph.Graph[uint32, uint32] {
 	graph := make(graph.Graph[uint32, uint32])
 	for entry := range in {
-		if graph[entry.Actor.ID] == nil {
-			graph[entry.Actor.ID] = make(map[uint32]uint32)
+		entryData := entry.Data
+		if graph[entryData.Actor.ID] == nil {
+			graph[entryData.Actor.ID] = make(map[uint32]uint32)
 		}
-		graph[entry.Actor.ID][entry.Repo.ID] += 1
+		graph[entryData.Actor.ID][entryData.Repo.ID] += 1
 	}
 	return graph
 }
