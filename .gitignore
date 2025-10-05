@@ -2,3 +2,13 @@ data/*
 unused-scripts/*
 stream-parser
 *.txt
+*.csv
+*.py
+out.*
+log*
+lib
+*.png
+*.html
+*.png
+*.gephi
+*.gexf
