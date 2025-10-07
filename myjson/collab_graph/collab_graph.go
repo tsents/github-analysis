@@ -8,6 +8,7 @@ package collabgraph
 import (
 	"stream-parser/graph"
 	"stream-parser/myjson"
+	"strings"
 )
 
 //Simillar to other defined, but slimmed to just id's, and no payloads.
@@ -60,3 +61,52 @@ func WeightedCollabGraphManeger(in <-chan myjson.ParsedEntry[slimEvent]) graph.G
 	return graph
 }
 
+/*
+func tokenizeText(s string) []string {
+	return strings.FieldsFunc(s, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+	})
+}
+*/
+
+func tokenizeText(s string) []string {
+	var tokens []string
+	var sb strings.Builder
+	sb.Grow(32) // reduce reallocs for typical word sizes
+
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+
+		// If ASCII letter: add to current token
+		if (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') {
+			// Lowercase inline (avoid strings.ToLower)
+			if b >= 'A' && b <= 'Z' {
+				b += 'a' - 'A'
+			}
+			sb.WriteByte(b)
+			continue
+		}
+
+		// Separator: flush current token if any
+		if sb.Len() > 0 {
+			tokens = append(tokens, sb.String())
+			sb.Reset()
+		}
+	}
+
+	if sb.Len() > 0 {
+		tokens = append(tokens, sb.String())
+	}
+
+	return tokens
+}
+
+func WordCounter(in <-chan myjson.ParsedEntry[slimEvent]) map[string]int {
+	counter := make(map[string]int)
+	for entry := range in {
+		for _, i := range tokenizeText(string(*entry.RawEntry)) {
+			counter[i]++;
+		}
+	}
+	return counter; 
+}

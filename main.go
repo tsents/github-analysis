@@ -34,6 +34,17 @@ func weightedCollabGraph(files []string, inputType string) graph.Graph[uint32, u
 	return collabGraph
 }
 
+func wordCounter(files []string, inputType string) { 
+	manager := collabgraph.WordCounter
+	counter, err := myjson.ParseInParallel(files, manager, inputType)
+	if (err != nil) {
+		fmt.Fprintf(os.Stderr, "Error encounted collabGraph: %s\n", err)
+		return 
+	}
+	fmt.Println(counter);
+	return 
+}
+
 func getMemoryUsage() string {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -99,6 +110,8 @@ func main() {
 		case "weightedCollabGraph":
 			outputGraph := weightedCollabGraph(files, *inputType)
 			graph.EdgeListOutputGraph(*output, outputGraph)
+		case "counter":
+			wordCounter(files, *inputType)
 		default:
 			fmt.Println("Action not found")
 			return
